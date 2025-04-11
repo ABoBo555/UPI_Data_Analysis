@@ -110,7 +110,8 @@ plt.show()
 
 # 6. Monthly Bar Chart Comparison
 fig6 = plt.figure(figsize=(10, 6))  # Adjusted figure size
-plt.bar(monthly_data.index.astype(str), monthly_data['Sent+Paid'], label='Sent/Paid', color='skyblue')fig5 = plt.figure(figsize=(10, 6))
+plt.bar(monthly_data.index.astype(str), monthly_data['Sent+Paid'], label='Sent/Paid', color='skyblue')
+fig5 = plt.figure(figsize=(10, 6))
 plt.bar(monthly_data.index.astype(str), monthly_data['Received'], label='Received', color='lightcoral', bottom=monthly_data['Sent+Paid'])
 plt.title('Monthly Comparison of Sent/Paid and Received Amounts')
 plt.xlabel('Month')
