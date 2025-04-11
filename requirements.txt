@@ -5,3 +5,6 @@ requests
 lxml
 openpyxl
 requests
+streamlit
+seaborn
+
