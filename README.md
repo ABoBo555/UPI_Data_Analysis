@@ -46,7 +46,7 @@ This will load and visualize your transaction data 📈
 
 You can run this directly from your browser using [Google Colab](https://colab.research.google.com):
 
-👉 **[Open in Colab](https://colab.research.google.com/drive/1BE4a0Tqkioacp_eRtsWvJ4JUrNRXt0Ld#scrollTo=Z-U7BVqFKR0a)**
+👉 **[Open in Colab](https://colab.research.google.com/drive/1hzUANIiwNv-OyMVOBExpGEcljvjjNM3K#scrollTo=bf9b55fa&uniqifier=1)**
 
 ### In Colab:
 1. When prompted(choose files), first upload the `My Activity.html` file (Google Pay).
