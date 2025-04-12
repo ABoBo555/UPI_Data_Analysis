@@ -20,16 +20,4 @@ six==1.17.0
 soupsieve==2.6
 typing_extensions==4.13.1
 tzdata==2025.2
-=======
-python=3.13.1
-matplotlib
-pandas
-beautifulsoup4
-requests
-lxml
-openpyxl
-requests
-streamlit
-seaborn
 
->>>>>>> 670e7000ea2e1eb917c3534b2558a1f338b17765
