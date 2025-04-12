@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 Title,Status,Amount,Recipent/Sender Info,Payment Method,Date,Time
 Paytm,Paid,₹391.00,Paid to Blinkit,Jammu and Kashmir Bank - 0572,Jun 04 2025,3:26:40 PM
 Paytm,Received,₹2000.00,Received from Hridoy Barua,Jammu and Kashmir Bank - 0572,Jan 04 2025,4:44:42 PM
@@ -17,3 +18,24 @@ Paytm,Paid,₹20.00,Paid to Shankar Gupta,UPI Lite,20/05/2024,8:20:29 PM
 Paytm,Paid,₹15.00,Paid to Kosar Khan,UPI Lite,20/05/2024,7:43:15 AM
 Paytm,Paid,₹20.00,Paid to Nasim Tea Stall,UPI Lite,19/05/2024,6:55:15 PM
 Paytm,Paid,₹1.00,Money sent to Niraj Kumar,State Bank Of India - 1552,25/03/2024,10:16:14 PM
+=======
+Title,Status,Amount,Recipent/Sender Info,Payment Method,Date,Time
+Paytm,Paid,₹391.00,Paid to Blinkit,Jammu and Kashmir Bank - 0572,Jun 04 2025,3:26:40 PM
+Paytm,Received,₹2000.00,Received from Hridoy Barua,Jammu and Kashmir Bank - 0572,Jan 04 2025,4:44:42 PM
+Paytm,Received,₹50.00,Received from One Ninety Seven,Jammu and Kashmir Bank - 0572,Aug 03 2025,12:30:35 PM
+Paytm,Paid,₹100.00,Money sent to Ali Elsayed Abakar Eldago,Jammu and Kashmir Bank - 0572,Jun 03 2025,6:06:54 PM
+Paytm,Received,₹50.00,Received from One Ninety Seven,Jammu and Kashmir Bank - 0572,Jun 03 2025,6:04:10 PM
+Paytm,Received,₹100.00,Received from Ali Elsayed Abakar Eldago,Jammu and Kashmir Bank - 0572,Jun 03 2025,6:04:00 PM
+Paytm,Paid,₹299.00,Recharge of Jio Mobile 8847203769,Jammu and Kashmir Bank - 0572,Mar 02 2025,1:26:23 AM
+Paytm,Received,₹1.00,Received from Yasir Mukhtar Dafaalla Mohamed,Jammu and Kashmir Bank - 0572,Dec 01 2025,10:37:51 PM
+Paytm,Paid,₹1510.61,Paid to Www Tatacliq Com,Jammu and Kashmir Bank - 0572,Dec 01 2025,9:50:13 PM
+Paytm,Paid,₹40.00,Purchase of Delhi Metro QR Tickets,Jammu and Kashmir Bank - 0572,31/12/2024,4:26:33 PM
+Paytm,Paid,₹1261.00,Paid to Confirm Ticket Onlin,Jammu and Kashmir Bank - 0572,25/12/2024,11:14:32 AM
+Paytm,Paid,₹60.00,Purchase of Delhi Metro QR Tickets,Jammu and Kashmir Bank - 0572,Sep 12 2024,7:51:58 AM
+Paytm,Paid,₹20.00,Purchase of Delhi Metro QR Tickets,Jammu and Kashmir Bank - 0572,Sep 12 2024,7:21:36 AM
+Paytm,Paid,₹40.00,Money sent to Nitish,UPI Lite,22/05/2024,10:39:44 AM
+Paytm,Paid,₹20.00,Paid to Shankar Gupta,UPI Lite,20/05/2024,8:20:29 PM
+Paytm,Paid,₹15.00,Paid to Kosar Khan,UPI Lite,20/05/2024,7:43:15 AM
+Paytm,Paid,₹20.00,Paid to Nasim Tea Stall,UPI Lite,19/05/2024,6:55:15 PM
+Paytm,Paid,₹1.00,Money sent to Niraj Kumar,State Bank Of India - 1552,25/03/2024,10:16:14 PM
+>>>>>>> 670e7000ea2e1eb917c3534b2558a1f338b17765
