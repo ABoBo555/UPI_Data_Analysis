@@ -75,6 +75,16 @@ You can run this directly from your browser using [Google Colab](https://colab.r
 
 ---
 
+## 🔧 Requirements
+
+- Python 3.13.1
+- Virtual environment recommended (`python -m venv myenv`)
+- Install dependencies using:
+
+```bash
+pip install -r requirements.txt
+
+
 ## 🙌 Contribution & Feedback
 
 Feel free to open issues, contribute enhancements, or suggest features. Let’s improve personal finance visibility for everyone! ✨
