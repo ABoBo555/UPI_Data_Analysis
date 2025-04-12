@@ -83,7 +83,7 @@ You can run this directly from your browser using [Google Colab](https://colab.r
 
 ```bash
 pip install -r requirements.txt
-
+```
 
 ## 🙌 Contribution & Feedback
 
