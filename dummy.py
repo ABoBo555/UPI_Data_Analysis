@@ -1,167 +1,240 @@
-# Import necessary libraries
 import pandas as pd
-from bs4 import BeautifulSoup
-import re # Import regular expressions library
-import os # To check if file exists
+import numpy as np
+import sys
 
 # --- Configuration ---
-html_file_path = 'My Activity.html' # Make sure this file is in the same directory as the script, or provide the full path
-excel_filename = 'scraped_data.xlsx'
-csv_filename = 'scraped_data.csv'
+# !!! IMPORTANT: Replace with the correct path to YOUR Excel file !!!
+excel_file_path = 'paytm.xlsx'
+sheet_name = 'Passbook Payment History' # Use None to read the first sheet, or specify 'Sheet1', 'Transactions', etc.
+comment_to_remove = "This is not included in total paid and received calculations." # Exact string to filter out
 
-# --- Step 1: Read HTML Content from File ---
-html_content = None
-if not os.path.exists(html_file_path):
-    print(f"Error: HTML file not found at '{html_file_path}'")
-    exit() # Stop the script if the file doesn't exist
+# --- Step 0: Read Data ---
+print(f"--- Reading data from: {excel_file_path} ---")
+try:
+    # Read all columns as strings initially to preserve original values before filtering/parsing
+    df = pd.read_excel(excel_file_path, sheet_name=sheet_name, dtype=str)
+    print(f"--- Successfully read. Original DataFrame shape: {df.shape} ---")
+except FileNotFoundError:
+    print(f"Error: File not found at '{excel_file_path}'. Please check the path.")
+    sys.exit(1)
+except Exception as e:
+    print(f"Error reading Excel file: {e}")
+    sys.exit(1)
+
+# --- Step 1: Initial Cleanup (Before Filtering) ---
+print("\n--- Applying Initial Cleanup (Before Filtering) ---")
+
+# 1a. Trim Whitespace (Crucial for accurate comparisons)
+df = df.map(lambda x: x.strip() if isinstance(x, str) else x)
+print("Trimmed whitespace from all cells.")
+
+# 1b. Rename Columns
+rename_map = {
+    'Transaction Details': 'Recipent/Sender Info',
+    'Your Account': 'Payment Method'
+}
+columns_renamed = []
+for old_name, new_name in rename_map.items():
+    if old_name in df.columns:
+        df.rename(columns={old_name: new_name}, inplace=True)
+        columns_renamed.append(f"'{old_name}' to '{new_name}'")
+if columns_renamed:
+    print(f"Renamed columns: {', '.join(columns_renamed)}.")
+else:
+    print("Did not find 'Transaction Details' or 'Your Account' columns to rename.")
+
+# 1c. Drop Non-Essential Columns (Keep 'Comment' for filtering!)
+cols_to_drop_initial = ['UPI Ref No.', 'Order ID', 'Remarks', 'Tags']
+existing_cols_to_drop = [col for col in cols_to_drop_initial if col in df.columns]
+if existing_cols_to_drop:
+    df.drop(columns=existing_cols_to_drop, inplace=True)
+    print(f"Dropped initial non-essential columns: {existing_cols_to_drop}.")
+else:
+    print("Did not find 'UPI Ref No.', 'Order ID', 'Remarks', 'Tags' columns to drop.")
+
+print(f"DataFrame shape after initial cleanup: {df.shape}")
+
+# --- Step 2: Filter Rows based on 'Comment' ---
+print("\n--- Filtering Rows Based on 'Comment' ---")
+if 'Comment' in df.columns:
+    initial_rows = len(df)
+    # Ensure comment column is string and handle potential None/NaN before comparison
+    df['Comment'] = df['Comment'].astype(str).fillna('')
+
+    # Create mask for rows to KEEP (comment DOES NOT match the string to remove)
+    rows_to_keep_mask = (df['Comment'] != comment_to_remove)
+    num_rows_to_remove = (~rows_to_keep_mask).sum()
+
+    print(f"   Found {num_rows_to_remove} rows matching the comment to remove.")
+
+    # Apply the filter
+    df = df[rows_to_keep_mask].copy() # Use .copy() to ensure it's a separate DataFrame
+    rows_removed = initial_rows - len(df)
+
+    print(f"Step 5 logic: Removed {rows_removed} rows.")
+    print(f"   DataFrame shape after filtering: {df.shape}")
+
+    # --- Step 3: Drop 'Comment' Column (AFTER Filtering) ---
+    if 'Comment' in df.columns: # Check it still exists
+        df.drop(columns=['Comment'], inplace=True)
+        print("Step 6 logic: Dropped 'Comment' column successfully.")
+    else:
+        print("   Warning: 'Comment' column was not found after filtering, couldn't drop it.")
+
+else:
+    print("Warning: Column 'Comment' not found in the original data. Skipping filtering and comment column drop.")
+
+# Check if DataFrame is empty after filtering
+if df.empty:
+    print("Error: DataFrame is empty after filtering. No data left to process.")
+    # Optionally exit or handle as needed
+    # sys.exit("Exiting script as DataFrame is empty.")
+
+
+# --- Step 4: Apply Transformations to the Filtered Data ---
+print("\n--- Applying Transformations to Remaining Data ---")
+
+# 4a. Add 'Title' Column
+df['Title'] = 'Paytm'
+print("Added 'Title' column.")
+
+# 4b. Process 'Amount' and create 'Status'
+if 'Amount' in df.columns:
+    print("Processing 'Amount' and creating 'Status'...")
+    original_amount_str = df['Amount'].astype(str).copy() # Keep original for fallback
+    # Clean and convert to numeric
+    df['Numeric_Amount'] = df['Amount'].str.replace(r'[+,"]', '', regex=True).str.strip()
+    df['Numeric_Amount'] = pd.to_numeric(df['Numeric_Amount'], errors='coerce')
+    failed_amount_mask = df['Numeric_Amount'].isna()
+    if failed_amount_mask.any(): print(f"   Warning: {failed_amount_mask.sum()} 'Amount' values could not be converted to numeric.")
+
+    # Create 'Status'
+    df['Status'] = 'Unknown' # Default status
+    df.loc[df['Numeric_Amount'] >= 0, 'Status'] = 'Received'
+    df.loc[df['Numeric_Amount'] < 0, 'Status'] = 'Paid'
+    print("   Created 'Status' column.")
+
+    # Format 'Amount' column string
+    df.loc[~failed_amount_mask, 'Amount'] = df.loc[~failed_amount_mask, 'Numeric_Amount'].abs().map('₹{:.2f}'.format)
+    df.loc[failed_amount_mask, 'Amount'] = original_amount_str[failed_amount_mask] # Use original if conversion failed
+    print("   Formatted 'Amount' column with ₹ symbol (kept original for errors).")
+
+    # Drop temporary numeric column
+    if 'Numeric_Amount' in df.columns: df.drop(columns=['Numeric_Amount'], inplace=True)
+else:
+    print("Warning: 'Amount' column not found. Skipping Amount/Status processing.")
+
+# 4c. Format 'Date' Column
+if 'Date' in df.columns:
+    print("Formatting 'Date' column (expecting dd/mm/yyyy input)...") # Updated message
+    original_dates = df['Date'].astype(str).copy() # Keep original strings
+    try:
+        # *** Explicitly specify the expected input format: Day/Month/Year ***
+        datetime_dates = pd.to_datetime(original_dates, format='%d/%m/%Y', errors='coerce')
+
+        failed_mask = datetime_dates.isna() # Check for NaT results (parsing failures)
+
+        # Apply formatting only to successfully parsed dates
+        df.loc[~failed_mask, 'Date'] = datetime_dates[~failed_mask].dt.strftime('%b %d %Y')
+
+        # Keep original string for failed dates (those not matching dd/mm/yyyy)
+        if failed_mask.any():
+             print(f"   Warning: {failed_mask.sum()} date values did not match 'dd/mm/yyyy' format and were kept as original.")
+             df.loc[failed_mask, 'Date'] = original_dates[failed_mask] # Assign original back
+        else:
+             print("   All dates successfully parsed and formatted.")
+
+    except Exception as e:
+        # Catch any other unexpected errors during the process
+        print(f"   Warning: Unexpected error during 'Date' formatting: {e}. Keeping original values.")
+        df['Date'] = original_dates # Revert all to original on severe error
+else:
+    print("Warning: 'Date' column not found. Skipping Date formatting.")
+
+
+# 4d. Format 'Time' Column
+if 'Time' in df.columns:
+    print("Formatting 'Time' column...")
+    original_times = df['Time'].astype(str).copy()
+    try:
+        # Attempt conversion to datetime objects to leverage formatting
+        # It's robust to try parsing first, then format
+        datetime_times = pd.to_datetime(original_times, errors='coerce') # Let pandas try to parse first
+        failed_mask = datetime_times.isna()
+
+        # Format successfully converted times
+        if (~failed_mask).any():
+             # Use strftime for the desired output format (12-hour clock with AM/PM)
+             formatted_times = datetime_times[~failed_mask].dt.strftime('%I:%M:%S %p')
+             # Remove leading zero from hour (e.g., 03 PM -> 3 PM)
+             formatted_times = formatted_times.apply(lambda x: x[1:] if isinstance(x, str) and x.startswith('0') else x)
+             df.loc[~failed_mask, 'Time'] = formatted_times
+        else:
+            # This handles cases where NO times could be parsed at all
+            print("   Warning: No times were successfully parsed for formatting.")
+
+        # Keep original string for failed times
+        # This covers times that pd.to_datetime couldn't understand
+        if failed_mask.any():
+            print(f"   Warning: {failed_mask.sum()} time values could not be parsed and were kept as original.")
+            df.loc[failed_mask, 'Time'] = original_times[failed_mask]
+
+        print("   Formatted 'Time' column (kept original for errors).")
+    except Exception as e:
+         print(f"   Warning: Unexpected error during 'Time' formatting: {e}. Keeping original values.")
+         df['Time'] = original_times # Revert to original if unexpected error
+else:
+    print("Warning: 'Time' column not found. Skipping Time formatting.")
+
+
+# --- Step 5: Final Column Reordering ---
+print("\n--- Finalizing Column Order ---")
+final_columns_order_requested = [
+    'Title', 'Status', 'Amount', 'Recipent/Sender Info',
+    'Payment Method', 'Date', 'Time'
+]
+
+available_columns = df.columns.tolist()
+final_columns_order_existing = [col for col in final_columns_order_requested if col in available_columns]
+
+print(f"   Columns available before reordering: {available_columns}")
+print(f"   Final columns selected in order: {final_columns_order_existing}")
 
 try:
-    with open(html_file_path, 'r', encoding='utf-8') as f:
-        html_content = f.read()
-    print(f"Successfully read HTML content from '{html_file_path}'")
-except Exception as e:
-    print(f"Error reading HTML file: {e}")
-    exit() # Stop if reading fails
+    df_cleaned = df[final_columns_order_existing].copy()
+    print("Step 12 logic: Reordered columns to final structure.")
+except KeyError as e:
+    print(f"Error reordering columns - missing expected column: {e}. Outputting available columns.")
+    df_cleaned = df.copy() # Fallback
 
-if not html_content:
-    print("HTML content is empty. Exiting.")
-    exit()
-
-# --- Step 2: Parse the HTML ---
-soup = BeautifulSoup(html_content, 'html.parser')
-
-# --- Step 3: Find all transaction blocks ---
-transaction_blocks = soup.find_all('div', class_='outer-cell mdl-cell mdl-cell--12-col mdl-shadow--2dp')
-if not transaction_blocks:
-    print("Warning: No transaction blocks found with class 'outer-cell mdl-cell mdl-cell--12-col mdl-shadow--2dp'. Check the HTML structure and class names.")
-
-# --- Step 4: Extract Data Points ---
-extracted_data = []
-
-for block in transaction_blocks:
-    # Initialize dictionary to store data for this transaction
-    data = {
-        'Title': None,
-        'Status': None,
-        'Amount': None,
-        'Recipient/Sender Info': None,
-        'Payment Method': None,
-        'Date': None,
-        'Time': None
-    }
-
-    # 1. Extract Title
-    title_tag = block.find('p', class_='mdl-typography--title')
-    if title_tag:
-        data['Title'] = title_tag.get_text(strip=True)
-    else:
-        print("Warning: Could not find title tag in a block.")
-
-
-    # Find the *inner* grid first, then the specific content cell within it
-    inner_grid = block.find('div', class_='mdl-grid')
-    if not inner_grid:
-        print("Warning: Could not find inner 'mdl-grid' within an outer block.")
-        extracted_data.append(data) # Append partially filled data or empty data
-        continue # Skip to the next block
-
-    # Find the main content cell containing the transaction details
-    # It's the first div with these classes that doesn't have 'mdl-typography--text-right'
-    content_cell = inner_grid.find('div', class_='content-cell mdl-cell mdl-cell--6-col mdl-typography--body-1')
-
-    if content_cell:
-        lines = list(content_cell.stripped_strings)
-
-        if len(lines) >= 1: # Need at least the main line
-            main_line = lines[0]
-
-            # 2, 3, 4, 5. Extract Status, Amount, Recipient/Sender, Payment Method
-            # Revised Regex: Handles missing "to/from" and "using" parts
-            # - Group 1: Status (Paid|Sent|Received)
-            # - Group 2: Amount (₹X.XX)
-            # - Group 3: (Optional) Recipient/Sender info (preceded by "to" or "from")
-            # - Group 4: (Optional) Payment method details (preceded by "using")
-            pattern = re.compile(
-                r'^(Paid|Sent|Received)\s+'                       # Status
-                r'(₹\d+\.\d{2,})\s*'                             # Amount (allowing optional space after)
-                r'(?:(?:to|from)\s+(.*?))?\s*'                   # Optional Recipient/Sender (non-capturing group for "to/from")
-                r'(?:using\s+(.*?))?$'                           # Optional Payment Method (non-capturing group for "using")
-                , re.IGNORECASE
-            )
-            match = pattern.match(main_line)
-
-            if match:
-                data['Status'] = match.group(1).capitalize()
-                data['Amount'] = match.group(2)
-                # Check if optional groups were captured
-                if match.group(3):
-                    data['Recipient/Sender Info'] = f"{'to' if data['Status'] == 'Paid' or data['Status'] == 'Sent' else 'from'} {match.group(3).strip()}" # Add 'to' or 'from' back based on Status
-                if match.group(4):
-                    data['Payment Method'] = f"using {match.group(4).strip()}"
-            else:
-                 print(f"Warning: Could not parse main transaction line: {main_line}")
-
-
-            # 6, 7. Extract Date and Time from the *second* line, if it exists
-            if len(lines) >= 2:
-                date_time_line = lines[1]
-                # Example: Apr 9, 2025, 9:22:11 PM GMT+05:30
-                parts = date_time_line.split(',')
-                if len(parts) >= 3:
-                    data['Date'] = f"{parts[0].strip()} {parts[1].strip()}"
-
-                    # Extract time (handle potential extra spaces or characters like  )
-                    time_match = re.search(r'(\d{1,2}:\d{2}:\d{2}\s?.*?\s?[AP]M)', parts[2]) # Made space before AM/PM optional
-                    if time_match:
-                         # Clean up potential HTML entities like   which is a narrow non-breaking space (\u202f)
-                         time_str = time_match.group(1).replace('\u202f', ' ').replace(' ', ' ').strip()
-                         # Further clean up potential multiple spaces introduced
-                         time_str = re.sub(r'\s+', ' ', time_str)
-                         data['Time'] = time_str
-                    else:
-                        print(f"Warning: Could not parse time from: {parts[2]}")
-                else:
-                     print(f"Warning: Could not parse date/time line: {date_time_line}")
-            else:
-                print(f"Warning: Only one line found in content cell, skipping date/time extraction for: {main_line}")
-
-        else:
-             print(f"Warning: Content cell is empty or contains no text: {content_cell}")
-
-    else:
-        # This message should appear less often now with the refined selector
-        print("Warning: Could not find the primary content cell (div.content-cell.mdl-cell--6-col.mdl-typography--body-1) within the inner grid of a block.")
-
-    # Add the extracted data dictionary to our list
-    extracted_data.append(data)
-
-# --- Step 5: Create Pandas DataFrame ---
-# Filter out any potential rows where critical info might be missing if needed,
-# although the current setup adds rows even if some fields are None.
-df = pd.DataFrame(extracted_data)
-
-# --- Step 6: Save Files ---
-if not df.empty:
-    # Save to Excel (.xlsx)
-    try:
-        # Ensure openpyxl is installed: pip install openpyxl
-        df.to_excel(excel_filename, index=False, engine='openpyxl')
-        print(f"\nData successfully saved to {excel_filename}")
-    except ImportError:
-        print("\nCould not save to Excel. Please install 'openpyxl': pip install openpyxl")
-    except Exception as e:
-        print(f"\nAn error occurred while saving to Excel: {e}")
-
-    # Save to CSV (.csv)
-    try:
-        df.to_csv(csv_filename, index=False, encoding='utf-8-sig') # utf-8-sig for Excel compatibility
-        print(f"Data successfully saved to {csv_filename}")
-    except Exception as e:
-        print(f"An error occurred while saving to CSV: {e}")
-
-    # Display the first few rows of the DataFrame (optional)
-    print("\n--- Scraped Data Preview ---")
-    print(df.head())
-    print("\n--------------------------")
+# --- Final Output ---
+print("\n--- Cleaned DataFrame head ---")
+if not df_cleaned.empty:
+    pd.set_option('display.max_rows', 25) # Show more rows if needed
+    pd.set_option('display.max_columns', None) # Ensure all columns are shown
+    pd.set_option('display.width', 1000) # Wider display
+    print(df_cleaned.head(25)) # Print more rows to verify
 else:
-    print("\nNo data was extracted, CSV/Excel files not created.")
+    print("Cleaned DataFrame is empty.")
+
+print("\n--- Sample rows from cleaned data ---")
+if not df_cleaned.empty:
+    sample_size = min(10, len(df_cleaned))
+    if sample_size > 0:
+        print(df_cleaned.sample(sample_size))
+else:
+    print("Cleaned DataFrame is empty, cannot show sample.")
+
+print("\n--- Cleaned DataFrame info ---")
+df_cleaned.info()
+
+# --- Optional: Save the cleaned DataFrame ---
+output_filename_csv = 'cleaned_paytm_transactions.csv'
+if not df_cleaned.empty:
+    try:
+        df_cleaned.to_csv(output_filename_csv, index=False)
+        print(f"\nCleaned data saved to CSV: '{output_filename_csv}'")
+    except Exception as e:
+        print(f"\nError saving cleaned data to CSV: {e}")
+else:
+    print("\nSkipping save because the cleaned DataFrame is empty.")
