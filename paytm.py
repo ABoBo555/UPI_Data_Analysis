@@ -131,17 +131,27 @@ else:
 if 'Date' in df.columns:
     print("Formatting 'Date' column...")
     original_dates = df['Date'].astype(str).copy()
-    try:
-        datetime_dates = pd.to_datetime(original_dates, errors='coerce') # Use original string for robust parsing
-        failed_mask = datetime_dates.isna()
-        # Apply formatting only to successfully parsed dates
-        df.loc[~failed_mask, 'Date'] = datetime_dates[~failed_mask].dt.strftime('%b %d %Y')
-        # Keep original string for failed dates
-        df.loc[failed_mask, 'Date'] = original_dates[failed_mask]
-        print("   Formatted 'Date' column (kept original for errors).")
-    except Exception as e:
-        print(f"   Warning: Error during 'Date' formatting: {e}. Keeping original values.")
-        df['Date'] = original_dates # Revert to original if unexpected error
+    
+    def format_date(date_str):
+        try:
+            # First try parsing as DD/MM/YYYY
+            if '/' in date_str:
+                parts = date_str.split('/')
+                if len(parts) == 3:
+                    day, month, year = parts
+                    # Convert to datetime using explicit format
+                    dt = pd.to_datetime(f"{year}-{month}-{day}")
+                    return dt.strftime('%b %d %Y')
+            
+            # If not DD/MM/YYYY format, try parsing as is
+            dt = pd.to_datetime(date_str)
+            return dt.strftime('%b %d %Y')
+        except:
+            return date_str  # Return original if parsing fails
+    
+    # Apply the custom formatting function
+    df['Date'] = df['Date'].apply(format_date)
+    print("   Formatted 'Date' column successfully.")
 else:
     print("Warning: 'Date' column not found. Skipping Date formatting.")
 

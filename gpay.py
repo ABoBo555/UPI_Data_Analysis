@@ -214,7 +214,36 @@ else:
     df = pd.DataFrame(extracted_data)
     # Reorder columns for consistency
     df = df[['Title', 'Status', 'Amount', 'Recipent/Sender Info', 'Payment Method', 'Date', 'Time']]
+    
+    # Data Cleansing: Handle empty values in Recipent/Sender Info and Payment Method
+    # Create boolean masks for the conditions
+    empty_both = df['Recipent/Sender Info'].isna() & df['Payment Method'].isna()
+    status_sent_paid = df['Status'].isin(['Sent', 'Paid'])
+    status_received = df['Status'] == 'Received'
+    
+    # Update Recipent/Sender Info based on Status
+    df.loc[empty_both & status_sent_paid, 'Recipent/Sender Info'] = 'to Unknown'
+    df.loc[empty_both & status_received, 'Recipent/Sender Info'] = 'from Unknown'
+    
+    # Update Payment Method for empty rows
+    df.loc[empty_both, 'Payment Method'] = 'Unknown'
+    df.loc[df['Payment Method'].isna(), 'Payment Method'] = 'Unknown'
 
+    # Fix misaligned bank account information
+    # Create mask for rows with misaligned bank account info
+    bank_account_mask = df['Recipent/Sender Info'].str.contains('to using Bank Account', na=False)
+    
+    # For matching rows, update both columns
+    for idx in df[bank_account_mask].index:
+        recipient_value = df.loc[idx, 'Recipent/Sender Info']
+        # Remove the 'to ' prefix from the value and assign to Payment Method
+        payment_method = recipient_value.replace('to ', '', 1)
+        # Update both columns
+        df.loc[idx, 'Payment Method'] = payment_method
+        df.loc[idx, 'Recipent/Sender Info'] = 'to Unknown'
+
+    print(f"\nData Cleansing: Updated {empty_both.sum()} rows with missing information in both fields")
+    print(f"Data Cleansing: Updated {bank_account_mask.sum()} rows with misaligned bank account information")
 
 # --- Step 6: Save Files ---
 if not df.empty:
