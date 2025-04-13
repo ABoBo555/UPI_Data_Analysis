@@ -34,11 +34,10 @@ You can run this project either locally or through **Google Colab** — no insta
 
 In your local environment:
 
-1. First run: `gpay.py`  
-2. Then run: `paytm.py`  
-3. Finally run: `main.py`
+> Run this file run.py
 
-This will load and visualize your transaction data 📈
+This will load data and visualize your transaction data 📈
+Then, you can see the graphs and charts saved in 'Saved_charts'
 
 ---
 
@@ -57,12 +56,13 @@ You can run this directly from your browser using [Google Colab](https://colab.r
 
 ## 📷 Sample Visuals
 
+- Net Overall Flow
+- Usage of different Payemnt Methods
 - Monthly trends
-- Sent vs Received
 - Top spending months
-- Transaction amount histogram
+- Transaction Distribution based-on range
 - Top recipients/senders
-
+- Useful Insight Card
 ---
 
 ## 🛠️ Tech Stack
