@@ -54,7 +54,7 @@ You can run this directly from your browser using [Google Colab](https://colab.r
 
 ---
 
-## 📷 Sample Visuals
+## 📷 Generated Visuals include
 
 - Net Overall Flow
 - Usage of different Payemnt Methods
