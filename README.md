@@ -37,7 +37,7 @@ In your local environment:
 > Run this file run.py
 
 This will load data and visualize your transaction data 📈
-Then, you can see the graphs and charts saved in 'Saved_charts'
+Then, you can see the graphs and charts saved in a new generated'Saved_charts' folder.
 
 ---
 
@@ -62,7 +62,7 @@ You can run this directly from your browser using [Google Colab](https://colab.r
 - Top spending months
 - Transaction Distribution based-on range
 - Top recipients/senders
-- Useful Insight Card
+- Meaningful Insight Card
 ---
 
 ## 🛠️ Tech Stack
