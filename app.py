@@ -134,7 +134,14 @@ def process_paytm_data(df):
 
 def prepare_combined_data(gpay_df, paytm_df):
     """Combine and prepare data for analysis"""
-    df = pd.concat([gpay_df, paytm_df], ignore_index=True)
+    if gpay_df is not None and paytm_df is not None:
+        df = pd.concat([gpay_df, paytm_df], ignore_index=True)
+    elif gpay_df is not None:
+        df = gpay_df.copy()
+    elif paytm_df is not None:
+        df = paytm_df.copy()
+    else:
+        raise ValueError("At least one dataframe must be provided")
     
     # Clean amount values
     df['Amount'] = df['Amount'].str.replace('₹', '').str.replace(',', '').astype(float)
@@ -346,19 +353,38 @@ st.sidebar.write("Upload your transaction data files below:")
 gpay_file = st.sidebar.file_uploader("Upload Google Pay Activity (HTML)", type=['html'])
 paytm_file = st.sidebar.file_uploader("Upload Paytm Transaction Data (XLSX)", type=['xlsx'])
 
-if gpay_file and paytm_file:
+# Generate Visuals Button
+st.sidebar.markdown("---")
+generate_button = st.sidebar.button("Generate Visualizations", type="primary")
+
+if generate_button:
     try:
-        # Process Google Pay data
-        gpay_content = gpay_file.read().decode('utf-8')
-        gpay_df = process_gpay_data(gpay_content)
+        combined_df = None
         
-        # Process Paytm data
-        paytm_df = pd.read_excel(paytm_file, sheet_name='Passbook Payment History')
-        paytm_df = process_paytm_data(paytm_df)
+        # Process Google Pay data if available
+        if gpay_file:
+            gpay_content = gpay_file.read().decode('utf-8')
+            gpay_df = process_gpay_data(gpay_content)
+            combined_df = prepare_combined_data(gpay_df, None)
+            st.sidebar.success("Google Pay data processed successfully!")
         
-        # Combine data
-        combined_df = prepare_combined_data(gpay_df, paytm_df)
+        # Process Paytm data if available
+        if paytm_file:
+            paytm_df = pd.read_excel(paytm_file, sheet_name='Passbook Payment History')
+            paytm_df = process_paytm_data(paytm_df)
+            if combined_df is not None:
+                # If we already have GPay data, combine with it
+                combined_df = prepare_combined_data(gpay_df, paytm_df)
+                st.sidebar.success("Data combined successfully!")
+            else:
+                # If only Paytm data is available
+                combined_df = prepare_combined_data(None, paytm_df)
+                st.sidebar.success("Paytm data processed successfully!")
         
+        if combined_df is None:
+            st.error("Please upload at least one data file (Google Pay or Paytm).")
+            st.stop()
+            
         # Main content area
         st.title("UPI Transaction Analysis Dashboard")
         
@@ -422,16 +448,16 @@ if gpay_file and paytm_file:
         
     except Exception as e:
         st.error(f"An error occurred while processing the data: {str(e)}")
-else:
-    # Display instructions when files are not uploaded
+else:    # Display instructions when files are not uploaded
     st.markdown("""
     # Welcome to UPI Transaction Analysis! 📊
     
-    This app helps you analyze your UPI transactions from Google Pay and Paytm. To get started:
+    This app helps you analyze your UPI transactions from Google Pay and/or Paytm. To get started:
     
-    1. Export your Google Pay activity as HTML (`My Activity.html`)
+    1. Export your Google Pay activity as HTML (`My Activity.html`) and/or
     2. Export your Paytm transactions as Excel (`.xlsx`)
-    3. Upload both files using the sidebar on the left
+    3. Upload your file(s) using the sidebar on the left
+    4. Click the 'Generate Visualizations' button to analyze your data
     
     You'll get:
     - Overall transaction flow
