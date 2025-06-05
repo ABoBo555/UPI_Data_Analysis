@@ -14,15 +14,41 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS
+# Custom CSS and Footer styles
 st.markdown("""
     <style>
     .main {
         padding: 2rem;
+        margin-bottom: 60px;
     }
     .stSidebar {
         padding: 2rem;
         background-color: #f5f5f5;
+    }
+    .footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: #f0f2f6;
+        padding: 10px;
+        text-align: right;
+        padding-right: 20px;
+        border-top: 1px solid #e0e0e0;
+        font-size: 0.8em;
+        z-index: 999;
+    }
+    .footer a {
+        color: #000;
+        text-decoration: none;
+        margin: 0 5px;
+    }
+    .footer a:hover {
+        text-decoration: underline;
+    }
+    .footer img {
+        vertical-align: middle;
+        margin-right: 4px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -450,22 +476,49 @@ if generate_button:
         st.error(f"An error occurred while processing the data: {str(e)}")
 else:    # Display instructions when files are not uploaded
     st.markdown("""
-    # Welcome to UPI Transaction Analysis! 📊
-    
-    This app helps you analyze your UPI transactions from Google Pay and/or Paytm. To get started:
-    
-    1. Export your Google Pay activity as HTML (`My Activity.html`) and/or
-    2. Export your Paytm transactions as Excel (`.xlsx`)
-    3. Upload your file(s) using the sidebar on the left
-    4. Click the 'Generate Visualizations' button to analyze your data
-    
-    You'll get:
-    - Overall transaction flow
-    - Monthly trends
-    - Transaction distribution
-    - Top recipients
-    - Payment method analysis
-    - Daily spending patterns
-    
-    Upload your files to begin! 🚀
-    """)
+    <span style="font-weight:bold; font-size:1.5em;">📊 UPI Data Analyzer</span>
+    <ul>
+        <li><b>UPI Data Analyzer</b> is a web application built using Python, Pandas, and Streamlit to help users extract and visualize transaction data from GPay and Paytm.</li>
+        <li>It parses <code>.html</code> files from GPay and <code>.xlsx</code> files from Paytm, cleans and aligns the data, then outputs insightful charts showing monthly expenses, category-wise spending, and top merchants.</li>
+        <li>Designed to give you a clearer picture of your digital spending habits with just a few clicks.</li>
+    </ul>
+    <b>📥 Data Download Guide</b>
+    <ul>
+        <li><b>How to download your GPay transaction data:</b>
+            <ul>
+                <li>Visit Google Takeout: <a href="https://takeout.google.com/" target="_blank">https://takeout.google.com/</a></li>
+                <li>Deselect all, then scroll down and select Google Pay.</li>
+                <li>Click Next step → Choose export type as "Export once".</li>
+                <li>Set file type to .zip and delivery method to your email.</li>
+                <li>Download the ZIP file from your email, extract it, and locate the file: <code>Google Pay/My Activity/My Activity.html</code>.</li>
+            </ul>
+        </li>
+        <li><b>How to download your Paytm transaction data:</b>
+            <ul>
+                <li>Open the Paytm app on your mobile.</li>
+                <li>Go to Balance & History → Passbook → Choose the wallet/bank account.</li>
+                <li>Tap on "Statement" or "Download statement".</li>
+                <li>Choose the date range you want and download the statement as <code>.xlsx</code>.</li>
+            </ul>
+        </li>
+    </ul>
+    <b>📚 Additional Resources</b>
+    <ul>
+        <li>🔗 GitHub Repository: UPI-Data-Scrap-Viz</li>
+        <li>💻 Try on Google Colab: Colab Notebook</li>
+    </ul>
+    """, unsafe_allow_html=True)    # Footer
+    st.markdown("""
+        <div class="footer">
+            <div style="text-align: right; padding-right: 20px;">
+                Developed by 
+                <a href="https://www.linkedin.com/in/raj-kapoor-aung-bo-bo-a34b47146" target="_blank">
+                    Raj(ABB)
+                </a> | 
+                <a href="https://github.com/ABoBo555/UPI-Data-Scrap-Viz" target="_blank">
+                    <img src="https://github.com/favicon.ico" width="16" height="16">
+                    GitHub
+                </a>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
