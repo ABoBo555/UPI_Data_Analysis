@@ -135,6 +135,8 @@ def process_paytm_data(df):
     
     # Process Amount and create Status
     if 'Amount' in df.columns:
+        # Convert Amount to string first to handle mixed types
+        df['Amount'] = df['Amount'].astype(str)
         df['Numeric_Amount'] = df['Amount'].str.replace(r'[+,"]', '', regex=True).str.strip()
         df['Numeric_Amount'] = pd.to_numeric(df['Numeric_Amount'], errors='coerce')
         
@@ -169,11 +171,28 @@ def prepare_combined_data(gpay_df, paytm_df):
     else:
         raise ValueError("At least one dataframe must be provided")
     
-    # Clean amount values
-    df['Amount'] = df['Amount'].str.replace('₹', '').str.replace(',', '').astype(float)
+    # FIXED: Clean amount values properly handling mixed types
+    def clean_amount(amount_val):
+        if pd.isna(amount_val):
+            return np.nan
+        
+        # Convert to string to handle both string and numeric inputs
+        amount_str = str(amount_val)
+        
+        # Remove currency symbols and commas
+        cleaned = re.sub(r'[₹,]', '', amount_str).strip()
+        
+        try:
+            return float(cleaned)
+        except (ValueError, TypeError):
+            return np.nan
+    
+    df['Amount'] = df['Amount'].apply(clean_amount)
     
     # Convert date to datetime
     def parse_date(date_str):
+        if pd.isna(date_str):
+            return pd.NaT
         try:
             return pd.to_datetime(date_str, format='%b %d %Y')
         except:
@@ -264,26 +283,51 @@ def plot_monthly_trends(monthly_sent_paid, monthly_received):
     return fig
 
 def plot_transaction_distribution(df):
-    """Plot transaction amount distribution"""
+    """Plot transaction amount distribution - COMPLETELY FIXED"""
     fig, ax = plt.subplots(figsize=(12, 6))
     
     if not df.empty:
-        bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 
+        # Create a temporary dataframe to avoid modifying the original
+        plot_df = df.copy()
+        
+        # Ensure Amount is numeric and remove any NaN values
+        plot_df['Amount'] = pd.to_numeric(plot_df['Amount'], errors='coerce')
+        plot_df = plot_df.dropna(subset=['Amount'])
+        
+        if plot_df.empty:
+            ax.text(0.5, 0.5, 'No valid amount data to display', 
+                   ha='center', va='center', transform=ax.transAxes)
+            return fig
+        
+        # CORRECTED: Define bin edges and labels properly
+        bins = [0.99, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 
                 200, 300, 400, 500, 1000, 2000, 3000, 4000, 5000, 
-                10000, 20000, 50000, 100000]
-        labels = ['0-10', '11-20', '21-30', '31-40', '41-50', 
+                10000, 20000, 50000, 100000, float('inf')]
+        
+        labels = ['1-10', '11-20', '21-30', '31-40', '41-50', 
                  '51-60', '61-70', '71-80', '81-90', '91-100',
                  '101-200', '201-300', '301-400', '401-500',
                  '501-1K', '1K-2K', '2K-3K', '3K-4K', '4K-5K',
-                 '5K-10K', '10K-20K', '20K-50K', '50K-100K']
+                 '5K-10K', '10K-20K', '20K-50K', '50K-100K', '100K+']
         
-        df['AmountBin'] = pd.cut(df['Amount'], bins=bins, labels=labels, right=True)
-        counts = df['AmountBin'].value_counts().reindex(labels, fill_value=0)
+        # Create bins with right-inclusive intervals
+        plot_df['AmountBin'] = pd.cut(
+            plot_df['Amount'],
+            bins=bins,
+            labels=labels,
+            include_lowest=True,
+            right=True
+        )
         
+        # Count transactions in each bin
+        counts = plot_df['AmountBin'].value_counts().reindex(labels, fill_value=0)
+        
+        # Create the bar plot
         bars = ax.bar(range(len(labels)), counts.values, 
                      color='skyblue', alpha=0.7,
                      edgecolor='black', linewidth=1)
         
+        # Add count labels on bars
         for bar in bars:
             height = bar.get_height()
             if height > 0:
@@ -298,6 +342,14 @@ def plot_transaction_distribution(df):
         ax.set_xticklabels(labels, rotation=45, ha='right')
         ax.yaxis.grid(True, linestyle='--', alpha=0.7)
         ax.set_axisbelow(True)
+        
+        # Debug: Print some sample mappings
+        sample_amounts = [1, 10, 11, 20, 21, 30, 60, 150, 300.9]
+        print("Debug - Amount to Bin mapping:")
+        for amt in sample_amounts:
+            if amt in plot_df['Amount'].values:
+                bin_val = plot_df[plot_df['Amount'] == amt]['AmountBin'].iloc[0]
+                print(f"Amount {amt} -> {bin_val}")
     
     plt.tight_layout()
     return fig
@@ -456,7 +508,8 @@ if generate_button:
             
             st.subheader("Daily Spending Patterns")
             st.pyplot(plot_daily_spending(combined_df))
-          # Download processed data
+            
+        # Download processed data
         st.sidebar.markdown("---")
         st.sidebar.subheader("Download Processed Data")
         
@@ -474,7 +527,10 @@ if generate_button:
         
     except Exception as e:
         st.error(f"An error occurred while processing the data: {str(e)}")
-else:    # Display instructions when files are not uploaded
+        st.write("Debug info:")
+        st.write(str(e))
+else:
+    # Display instructions when files are not uploaded
     st.markdown("""
     <span style="font-weight:bold; font-size:1.5em;">📊 UPI Data Analyzer</span>
     <ul>
@@ -507,7 +563,9 @@ else:    # Display instructions when files are not uploaded
         <li>🔗 GitHub Repository: UPI-Data-Scrap-Viz</li>
         <li>💻 Try on Google Colab: Colab Notebook</li>
     </ul>
-    """, unsafe_allow_html=True)    # Footer
+    """, unsafe_allow_html=True)
+    
+    # Footer
     st.markdown("""
         <div class="footer">
             <div style="text-align: right; padding-right: 20px;">
