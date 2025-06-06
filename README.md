@@ -8,7 +8,30 @@ Easily visualize and analyze your **Google Pay** and **Paytm** transaction data 
 
 This project helps you understand your digital transaction history by converting your raw **Google Pay** and **Paytm** data into clear and informative visualizations using Python.
 
-You can run this project either locally or through **[Google Colab](https://colab.research.google.com/drive/1hzUANIiwNv-OyMVOBExpGEcljvjjNM3K#scrollTo=91470bdc&uniqifier=1)** — no installation required!
+You can run this project either locally or through:
+
+1. **[Streamlit Web App](https://upidataviz.streamlit.app/)** - Instantly analyze your data with our online tool
+2. **[Google Colab](https://colab.research.google.com/drive/1hzUANIiwNv-OyMVOBExpGEcljvjjNM3K#scrollTo=91470bdc&uniqifier=1)** — run in your browser
+
+### 🌐 Using the Streamlit Web App
+
+The [UPI Data Analyzer](https://upidataviz.streamlit.app/) provides an interactive web interface where you can:
+
+- Upload your GPay and Paytm transaction files directly in your browser
+- Get instant visualizations of your spending patterns
+- View comprehensive transaction analysis including:
+  - Total transactions, sent/paid amounts, and net flow
+  - Overall transaction flow with intuitive pie and bar charts
+  - Monthly spending trends
+  - Transaction distribution analysis
+  - Payment method usage statistics
+  - Top recipients/senders
+  - Daily spending patterns
+- Download your processed data as CSV for further analysis
+
+![UPI Data Analyzer Interface](https://raw.githubusercontent.com/ABoBo555/UPI-Data-Scrap-Viz/main/demo_images/app_interface.png)
+
+No installation required - just visit the website and start analyzing your data! Your data remains private and is processed entirely in your browser session.
 
 ---
 
