@@ -70,10 +70,6 @@ def process_paytm_data(excel_content):
 
 def data_cleansing(combine_df):
     try:
-        """
-    Perform data cleansing on the Recipent/Sender Info column.
-    Includes standardizing text, replacing variants, and removing specific rows.
-    """
         # Make a copy to avoid modifying the original dataframe
         df = combine_df.copy()
 
