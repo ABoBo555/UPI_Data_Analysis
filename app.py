@@ -3,218 +3,154 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import tempfile
+import os
 from bs4 import BeautifulSoup
-import re
-from datetime import datetime
+import importlib.util
 
-# Set page configuration
-st.set_page_config(
-    page_title="UPI Transaction Analysis",
-    page_icon="💳",
-    layout="wide"
-)
-
-# Custom CSS and Footer styles
-st.markdown("""
-    <style>
-    .main {
-        padding: 2rem;
-        margin-bottom: 60px;
-    }
-    .stSidebar {
-        padding: 2rem;
-        background-color: #f5f5f5;
-    }
-    .footer {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        background-color: #f0f2f6;
-        padding: 10px;
-        text-align: right;
-        padding-right: 20px;
-        border-top: 1px solid #e0e0e0;
-        font-size: 0.8em;
-        z-index: 999;
-    }
-    .footer a {
-        color: #000;
-        text-decoration: none;
-        margin: 0 5px;
-    }
-    .footer a:hover {
-        text-decoration: underline;
-    }
-    .footer img {
-        vertical-align: middle;
-        margin-right: 4px;
-    }
-    </style>
-""", unsafe_allow_html=True)
+def load_python_file(file_path):
+    """Load a Python file as a module"""
+    spec = importlib.util.spec_from_file_location("module", file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 def process_gpay_data(html_content):
-    """Process Google Pay data from HTML content"""
-    soup = BeautifulSoup(html_content, 'html.parser')
-    transaction_blocks = soup.find_all('div', class_='outer-cell mdl-cell mdl-cell--12-col mdl-shadow--2dp')
-    
-    extracted_data = []
-    
-    for block in transaction_blocks:
-        data = {
-            'Title': None,
-            'Status': None,
-            'Amount': None,
-            'Recipent/Sender Info': None,
-            'Payment Method': None,
-            'Date': None,
-            'Time': None
+    """Process GPay data using gpay.py"""
+    # Create a temporary file to store the HTML content
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
+        temp_file.write(html_content)
+        temp_html_path = temp_file.name
+
+    try:
+        # Load gpay.py as a module
+        gpay_module = load_python_file('gpay.py')
+        
+        # Modify the module's file path variable
+        gpay_module.html_file_path = temp_html_path
+        
+        # Process will create gpay.csv
+        if hasattr(gpay_module, 'process_data'):
+            gpay_module.process_data()
+        
+        # Read the resulting CSV
+        if os.path.exists('gpay.csv'):
+            return pd.read_csv('gpay.csv')
+        return None
+    finally:
+        # Clean up temporary file
+        os.unlink(temp_html_path)
+
+def process_paytm_data(excel_content):
+    """Process Paytm data using paytm.py"""
+    # Create a temporary file to store the Excel content
+    with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as temp_file:
+        temp_file.write(excel_content.getvalue())
+        temp_excel_path = temp_file.name
+
+    try:
+        # Load paytm.py as a module
+        paytm_module = load_python_file('paytm.py')
+        
+        # Modify the module's file path variable
+        paytm_module.excel_file_path = temp_excel_path
+        
+        # Process will create paytm.csv
+        if hasattr(paytm_module, 'process_data'):
+            paytm_module.process_data()
+        
+        # Read the resulting CSV
+        if os.path.exists('paytm.csv'):
+            return pd.read_csv('paytm.csv')
+        return None
+    finally:
+        # Clean up temporary file
+        os.unlink(temp_excel_path)
+
+
+def data_cleansing(combine_df):
+    try:
+        """
+    Perform data cleansing on the Recipent/Sender Info column.
+    Includes standardizing text, replacing variants, and removing specific rows.
+    """
+        # Make a copy to avoid modifying the original dataframe
+        df = combine_df.copy()
+
+        # Convert to lowercase and strip spaces
+        df['Recipent/Sender Info'] = df['Recipent/Sender Info'].str.lower().str.strip()
+        
+        # Text transformation mappings
+        transformations = {
+            r'recharge of jio mobile \d+': 'to jio prepaid',
+            r'to jio prepaid( recharges)?': 'to jio prepaid',
+            r'purchase of delhi metro qr tickets': 'to delhi metro',
+            r'to delhi metro rail cor(poration ltd)?': 'to delhi metro',
+            r'to dmrc( limited)?': 'to delhi metro',
+            r'to abhibus( com)?': 'to abhibus',
+            r'to amazon pay groceries': 'to amazon india',
+            r'to amazon india': 'to amazon india',
+            r'to archaeological survey of india( 02)?': 'to archaeological survey of india',
+            r'to blu\s?smart mobility private limited': 'to blusmart mobility private limited',
+            r'to delhivery\s?(?:private)?limited': 'to delhivery limited',
+            r'to (?:hotel )?hari piorko( grand)?': 'to hotel hari piorko',
+            r'to lords trading co(?:mpany)?': 'to lords trading company',
+            r'to sanjay  kumar': 'to sanjay kumar',
+            r'to yarraphagari pranay( theja)?': 'to yarraphagari pranay',
+            r'(?:paid )?to www tatacliq com': 'to tatacliq'
         }
         
-        title_tag = block.find('p', class_='mdl-typography--title')
-        if title_tag:
-            data['Title'] = title_tag.get_text(strip=True)
+        # Apply transformations
+        for pattern, replacement in transformations.items():
+            df['Recipent/Sender Info'] = df['Recipent/Sender Info'].str.replace(
+                pattern, replacement, regex=True
+            )
         
-        content_cell = block.find('div', class_='content-cell mdl-cell mdl-cell--6-col mdl-typography--body-1')
-        if content_cell:
-            lines = [text for text in content_cell.stripped_strings]
-            if lines:
-                main_line = lines[0]
-                match_base = re.match(
-                    r'^(Paid|Sent|Received)\s+(₹[\d,]+\.\d{2,})\s*(.*)$',
-                    main_line,
-                    re.IGNORECASE | re.DOTALL
-                )
-                
-                if match_base:
-                    data['Status'] = match_base.group(1).capitalize()
-                    data['Amount'] = match_base.group(2)
-                    remainder = match_base.group(3).strip()
-                    
-                    using_match = re.search(r'\susing\s+(.*)$', remainder, re.IGNORECASE)
-                    if using_match:
-                        data['Payment Method'] = f"using {using_match.group(1).strip()}"
-                        potential_recipient = remainder[:using_match.start()].strip()
-                        if potential_recipient.lower().startswith(('to ', 'from ')):
-                            data['Recipent/Sender Info'] = potential_recipient
-                        else:
-                            prefix = 'to' if data['Status'] in ['Paid', 'Sent'] else 'from'
-                            data['Recipent/Sender Info'] = f"{prefix} {potential_recipient}"
-                    else:
-                        if remainder:
-                            prefix = 'to' if data['Status'] in ['Paid', 'Sent'] else 'from'
-                            data['Recipent/Sender Info'] = f"{prefix} {remainder}"
-                
-                if len(lines) >= 2:
-                    date_time_line = lines[1]
-                    parts = date_time_line.split(',')
-                    if len(parts) >= 3:
-                        data['Date'] = f"{parts[0].strip()} {parts[1].strip()}"
-                        time_part_str = parts[2].strip()
-                        time_match = re.search(r'(\d{1,2}:\d{2}:\d{2}(\s*|\u202f)[AP]M)', time_part_str)
-                        if time_match:
-                            data['Time'] = time_match.group(1).replace('\u202f', ' ').strip()
+        # Rows to delete
+        rows_to_delete = [
+            'money sent to ali elsayed abakar eldago',
+            'received from ali elsayed abakar eldago',
+            'to tata cliq'
+        ]
         
-        extracted_data.append(data)
-    
-    return pd.DataFrame(extracted_data)
+        # Remove specified rows
+        df = df[~df['Recipent/Sender Info'].isin(rows_to_delete)]
 
-def process_paytm_data(df):
-    """Process Paytm data from DataFrame"""
-    df = df.copy()
-    
-    # Rename columns for consistency
-    rename_map = {
-        'Transaction Details': 'Recipent/Sender Info',
-        'Your Account': 'Payment Method'
-    }
-    df.rename(columns=rename_map, inplace=True)
-    
-    # Add Title column
-    df['Title'] = 'Paytm'
-    
-    # Process Amount and create Status
-    if 'Amount' in df.columns:
-        # Convert Amount to string first to handle mixed types
-        df['Amount'] = df['Amount'].astype(str)
-        df['Numeric_Amount'] = df['Amount'].str.replace(r'[+,"]', '', regex=True).str.strip()
-        df['Numeric_Amount'] = pd.to_numeric(df['Numeric_Amount'], errors='coerce')
-        
-        df['Status'] = 'Unknown'
-        df.loc[df['Numeric_Amount'] >= 0, 'Status'] = 'Received'
-        df.loc[df['Numeric_Amount'] < 0, 'Status'] = 'Paid'
-        
-        df.loc[df['Numeric_Amount'].notna(), 'Amount'] = df.loc[df['Numeric_Amount'].notna(), 'Numeric_Amount'].abs().map('₹{:.2f}'.format)
-        df.drop(columns=['Numeric_Amount'], inplace=True)
-    
-    # Format Date and Time
-    if 'Date' in df.columns:
-        df['Date'] = pd.to_datetime(df['Date'], format='%d/%m/%Y', errors='coerce')
-        df['Date'] = df['Date'].dt.strftime('%b %d %Y')
-    
-    if 'Time' in df.columns:
-        df['Time'] = pd.to_datetime(df['Time'], format='%I:%M:%S %p', errors='coerce').dt.strftime('%I:%M:%S %p')
-        df['Time'] = df['Time'].str.replace('^0', '', regex=True)
-    
-    # Reorder columns
-    columns_order = ['Title', 'Status', 'Amount', 'Recipent/Sender Info', 'Payment Method', 'Date', 'Time']
-    return df[columns_order]
-
-def prepare_combined_data(gpay_df, paytm_df):
-    """Combine and prepare data for analysis"""
-    if gpay_df is not None and paytm_df is not None:
-        df = pd.concat([gpay_df, paytm_df], ignore_index=True)
-    elif gpay_df is not None:
-        df = gpay_df.copy()
-    elif paytm_df is not None:
-        df = paytm_df.copy()
-    else:
-        raise ValueError("At least one dataframe must be provided")
-    
-    # FIXED: Clean amount values properly handling mixed types
-    def clean_amount(amount_val):
-        if pd.isna(amount_val):
-            return np.nan
-        
-        # Convert to string to handle both string and numeric inputs
-        amount_str = str(amount_val)
-        
-        # Remove currency symbols and commas
-        cleaned = re.sub(r'[₹,]', '', amount_str).strip()
-        
-        try:
-            return float(cleaned)
-        except (ValueError, TypeError):
-            return np.nan
-    
-    df['Amount'] = df['Amount'].apply(clean_amount)
-    
-    # Convert date to datetime
-    def parse_date(date_str):
-        if pd.isna(date_str):
-            return pd.NaT
-        try:
-            return pd.to_datetime(date_str, format='%b %d %Y')
-        except:
+        df['Amount'] = df['Amount'].str.replace('₹', '').str.replace(',', '').astype(float)
+            
+        # Convert date to datetime
+        def parse_date(date_str):
             try:
-                return pd.to_datetime(date_str, format='%b %d, %Y')
+                return pd.to_datetime(date_str, format='%b %d %Y')
             except:
-                return pd.NaT
+                try:
+                    return pd.to_datetime(date_str, format='%b %d, %Y')
+                except:
+                    return pd.NaT
+            
+        df['Date'] = df['Date'].apply(parse_date)
+            
+        # Add useful columns for analysis
+        df['Month'] = df['Date'].dt.strftime('%Y-%m')
+        df['DayOfWeek'] = df['Date'].dt.day_name()
+            
+        # Clean up Payment Method
+        mask_0572 = df['Payment Method'].str.contains('0572', na=False)
+        mask_1552 = df['Payment Method'].str.contains('1552', na=False)
+            
+        df.loc[mask_0572, 'Payment Method'] = 'Jammu and Kashmir Bank - 0572'
+        df.loc[mask_1552, 'Payment Method'] = 'State Bank Of India - 1552'
+
+        # convert Status value 'Sent' to 'Paid'
+        sent_df = df['Status'].str.contains('Sent',na=False)
+        df.loc[sent_df,'Status'] = 'Paid'
+
+        return df
     
-    df['Date'] = df['Date'].apply(parse_date)
-    
-    # Add useful columns for analysis
-    df['Month'] = df['Date'].dt.strftime('%Y-%m')
-    df['DayOfWeek'] = df['Date'].dt.day_name()
-    
-    # Payment Method standardization
-    mask_0572 = df['Payment Method'].str.contains('0572', na=False)
-    mask_1552 = df['Payment Method'].str.contains('1552', na=False)
-    
-    df.loc[mask_0572, 'Payment Method'] = 'Jammu and Kashmir Bank - 0572'
-    df.loc[mask_1552, 'Payment Method'] = 'State Bank Of India - 1552'
-    
-    return df
+    except Exception as e:
+        print(f"Error processing data: {e}")
+        return None
+
 
 def plot_overall_flow(sent_paid_amount, received_amount):
     """Plot overall transaction flow"""
@@ -283,51 +219,26 @@ def plot_monthly_trends(monthly_sent_paid, monthly_received):
     return fig
 
 def plot_transaction_distribution(df):
-    """Plot transaction amount distribution - COMPLETELY FIXED"""
+    """Plot transaction amount distribution"""
     fig, ax = plt.subplots(figsize=(12, 6))
     
     if not df.empty:
-        # Create a temporary dataframe to avoid modifying the original
-        plot_df = df.copy()
-        
-        # Ensure Amount is numeric and remove any NaN values
-        plot_df['Amount'] = pd.to_numeric(plot_df['Amount'], errors='coerce')
-        plot_df = plot_df.dropna(subset=['Amount'])
-        
-        if plot_df.empty:
-            ax.text(0.5, 0.5, 'No valid amount data to display', 
-                   ha='center', va='center', transform=ax.transAxes)
-            return fig
-        
-        # CORRECTED: Define bin edges and labels properly
-        bins = [0.99, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 
+        bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 
                 200, 300, 400, 500, 1000, 2000, 3000, 4000, 5000, 
-                10000, 20000, 50000, 100000, float('inf')]
-        
-        labels = ['1-10', '11-20', '21-30', '31-40', '41-50', 
+                10000, 20000, 50000, 100000]
+        labels = ['0-10', '11-20', '21-30', '31-40', '41-50', 
                  '51-60', '61-70', '71-80', '81-90', '91-100',
                  '101-200', '201-300', '301-400', '401-500',
                  '501-1K', '1K-2K', '2K-3K', '3K-4K', '4K-5K',
-                 '5K-10K', '10K-20K', '20K-50K', '50K-100K', '100K+']
+                 '5K-10K', '10K-20K', '20K-50K', '50K-100K']
         
-        # Create bins with right-inclusive intervals
-        plot_df['AmountBin'] = pd.cut(
-            plot_df['Amount'],
-            bins=bins,
-            labels=labels,
-            include_lowest=True,
-            right=True
-        )
+        df['AmountBin'] = pd.cut(df['Amount'], bins=bins, labels=labels, right=True)
+        counts = df['AmountBin'].value_counts().reindex(labels, fill_value=0)
         
-        # Count transactions in each bin
-        counts = plot_df['AmountBin'].value_counts().reindex(labels, fill_value=0)
-        
-        # Create the bar plot
         bars = ax.bar(range(len(labels)), counts.values, 
                      color='skyblue', alpha=0.7,
                      edgecolor='black', linewidth=1)
         
-        # Add count labels on bars
         for bar in bars:
             height = bar.get_height()
             if height > 0:
@@ -342,14 +253,6 @@ def plot_transaction_distribution(df):
         ax.set_xticklabels(labels, rotation=45, ha='right')
         ax.yaxis.grid(True, linestyle='--', alpha=0.7)
         ax.set_axisbelow(True)
-        
-        # Debug: Print some sample mappings
-        sample_amounts = [1, 10, 11, 20, 21, 30, 60, 150, 300.9]
-        print("Debug - Amount to Bin mapping:")
-        for amt in sample_amounts:
-            if amt in plot_df['Amount'].values:
-                bin_val = plot_df[plot_df['Amount'] == amt]['AmountBin'].iloc[0]
-                print(f"Amount {amt} -> {bin_val}")
     
     plt.tight_layout()
     return fig
@@ -423,6 +326,55 @@ def plot_daily_spending(df):
     plt.tight_layout()
     return fig
 
+
+
+
+# Set page configuration
+st.set_page_config(
+    page_title="UPI Transaction Analysis",
+    page_icon="💳",
+    layout="wide"
+)
+
+# Custom CSS and Footer styles
+st.markdown("""
+    <style>
+    .main {
+        padding: 2rem;
+        margin-bottom: 60px;
+    }
+    .stSidebar {
+        padding: 2rem;
+        background-color: #f5f5f5;
+    }
+    .footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: #f0f2f6;
+        padding: 10px;
+        text-align: right;
+        padding-right: 20px;
+        border-top: 1px solid #e0e0e0;
+        font-size: 0.8em;
+        z-index: 999;
+    }
+    .footer a {
+        color: #000;
+        text-decoration: none;
+        margin: 0 5px;
+    }
+    .footer a:hover {
+        text-decoration: underline;
+    }
+    .footer img {
+        vertical-align: middle;
+        margin-right: 4px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # Sidebar
 st.sidebar.title("📊 UPI Transaction Analysis")
 st.sidebar.write("Upload your transaction data files below:")
@@ -436,99 +388,109 @@ st.sidebar.markdown("---")
 generate_button = st.sidebar.button("Generate Visualizations", type="primary")
 
 if generate_button:
-    try:
-        combined_df = None
-        
-        # Process Google Pay data if available
+    if not gpay_file and not paytm_file:
+        st.error("Please upload at least one data file (Google Pay or Paytm).")
+        st.stop()
+
+    # Process uploaded files
+    df_gpay = None
+    df_paytm = None
+    
+    with st.spinner('Processing data...'):
         if gpay_file:
-            gpay_content = gpay_file.read().decode('utf-8')
-            gpay_df = process_gpay_data(gpay_content)
-            combined_df = prepare_combined_data(gpay_df, None)
-            st.sidebar.success("Google Pay data processed successfully!")
-        
-        # Process Paytm data if available
+            try:
+                html_content = gpay_file.getvalue().decode('utf-8')
+                df_gpay = process_gpay_data(html_content)
+                if df_gpay is None:
+                    st.error("Failed to process Google Pay data.")
+            except Exception as e:
+                st.error(f"Error processing Google Pay data: {str(e)}")
+
         if paytm_file:
-            paytm_df = pd.read_excel(paytm_file, sheet_name='Passbook Payment History')
-            paytm_df = process_paytm_data(paytm_df)
-            if combined_df is not None:
-                # If we already have GPay data, combine with it
-                combined_df = prepare_combined_data(gpay_df, paytm_df)
-                st.sidebar.success("Data combined successfully!")
-            else:
-                # If only Paytm data is available
-                combined_df = prepare_combined_data(None, paytm_df)
-                st.sidebar.success("Paytm data processed successfully!")
+            try:
+                df_paytm = process_paytm_data(paytm_file)
+                if df_paytm is None:
+                    st.error("Failed to process Paytm data.")
+            except Exception as e:
+                st.error(f"Error processing Paytm data: {str(e)}")
+
+    # Combine the dataframes if both exist
+    dfs = []
+    if df_gpay is not None:
+        dfs.append(df_gpay)
+    if df_paytm is not None:
+        dfs.append(df_paytm)
+    if not dfs:
+        st.error("No data was successfully processed.")
+        st.stop()
+    
+    # Combine dataframes
+    df_combined = pd.concat(dfs, ignore_index=True) if len(dfs) > 1 else dfs[0]
+    
+    # Perform data cleansing
+    df_combined = data_cleansing(df_combined)
+
+    # Main content area
+    st.title("UPI Transaction Analysis Dashboard")
+
+    # Calculate metrics
+    sent_paid_df = df_combined[df_combined['Status'].isin(['Sent', 'Paid'])]
+    received_df = df_combined[df_combined['Status'] == 'Received']
+
+    total_sent_paid = sent_paid_df['Amount'].sum()
+    total_received = received_df['Amount'].sum()
         
-        if combined_df is None:
-            st.error("Please upload at least one data file (Google Pay or Paytm).")
-            st.stop()
+    col1, col2, col3, col4 = st.columns(4)
+        
+    with col1:
+        st.metric("Total Transactions", f"{len(df_combined):,}")
+    with col2:
+        st.metric("Total Paid Amount", f"₹{total_sent_paid:,.2f}")
+    with col3:
+        st.metric("Total Received Amount", f"₹{total_received:,.2f}")
+    with col4:
+        st.metric("Net Flow", f"₹{total_received - total_sent_paid:,.2f}")
+    
+    
+    # Display summaries
+    st.subheader("Overall Transaction Flow")
+    st.pyplot(plot_overall_flow(total_sent_paid, total_received))
+    
+    st.subheader("Monthly Transaction Trends")
+    monthly_sent_paid = sent_paid_df.groupby('Month')['Amount'].sum()
+    monthly_received = received_df.groupby('Month')['Amount'].sum()
+    st.pyplot(plot_monthly_trends(monthly_sent_paid, monthly_received))
+   
+
+    col1, col2 = st.columns(2)
+        
+    with col1:
+        st.subheader("Transaction Distribution")
+        st.pyplot(plot_transaction_distribution(df_combined))
             
-        # Main content area
-        st.title("UPI Transaction Analysis Dashboard")
+        st.subheader("Payment Methods")
+        st.pyplot(plot_payment_methods(df_combined))
         
-        # Key metrics
-        sent_paid_df = combined_df[combined_df['Status'].isin(['Sent', 'Paid'])]
-        received_df = combined_df[combined_df['Status'] == 'Received']
-        
-        total_sent_paid = sent_paid_df['Amount'].sum()
-        total_received = received_df['Amount'].sum()
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Total Transactions", f"{len(combined_df):,}")
-        with col2:
-            st.metric("Total Sent/Paid", f"₹{total_sent_paid:,.2f}")
-        with col3:
-            st.metric("Total Received", f"₹{total_received:,.2f}")
-        with col4:
-            st.metric("Net Flow", f"₹{total_received - total_sent_paid:,.2f}")
-        
-        # Visualizations
-        st.subheader("Overall Transaction Flow")
-        st.pyplot(plot_overall_flow(total_sent_paid, total_received))
-        
-        st.subheader("Monthly Transaction Trends")
-        monthly_sent_paid = sent_paid_df.groupby('Month')['Amount'].sum()
-        monthly_received = received_df.groupby('Month')['Amount'].sum()
-        st.pyplot(plot_monthly_trends(monthly_sent_paid, monthly_received))
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Transaction Distribution")
-            st.pyplot(plot_transaction_distribution(combined_df))
+    with col2:
+        st.subheader("Top Recipients/Senders")
+        st.pyplot(plot_top_recipients(df_combined))
             
-            st.subheader("Payment Methods")
-            st.pyplot(plot_payment_methods(combined_df))
-        
-        with col2:
-            st.subheader("Top Recipients/Senders")
-            st.pyplot(plot_top_recipients(combined_df))
-            
-            st.subheader("Daily Spending Patterns")
-            st.pyplot(plot_daily_spending(combined_df))
-            
-        # Download processed data
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("Download Processed Data")
-        
-        @st.cache_data
-        def convert_df_to_csv():
-            return combined_df.to_csv(index=False).encode('utf-8')
-        
-        st.sidebar.download_button(
-            "Download Combined Data (CSV)",
-            convert_df_to_csv(),
-            "upi_transactions.csv",
-            "text/csv",
-            key='download-csv'
-        )
-        
-    except Exception as e:
-        st.error(f"An error occurred while processing the data: {str(e)}")
-        st.write("Debug info:")
-        st.write(str(e))
+        st.subheader("Daily Spending Patterns")
+        st.pyplot(plot_daily_spending(df_combined))
+
+    # Add download button for processed data
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Download Processed Data")
+    csv = df_combined.to_csv(index=False)
+    st.sidebar.download_button(
+        "Download Combined Data",
+        csv,
+        "combined_transactions.csv",
+        "text/csv",
+        key='download-csv'
+    )
+    
+
 else:
     # Display instructions when files are not uploaded
     st.markdown("""
@@ -564,19 +526,19 @@ else:
         <li>💻 Try on Google Colab: Colab Notebook</li>
     </ul>
     """, unsafe_allow_html=True)
-    
-    # Footer
-    st.markdown("""
-        <div class="footer">
-            <div style="text-align: right; padding-right: 20px;">
-                Developed by 
-                <a href="https://www.linkedin.com/in/raj-kapoor-aung-bo-bo-a34b47146" target="_blank">
-                    Raj(ABB)
-                </a> | 
-                <a href="https://github.com/ABoBo555/UPI-Data-Scrap-Viz" target="_blank">
-                    <img src="https://github.com/favicon.ico" width="16" height="16">
-                    GitHub
-                </a>
-            </div>
+
+# Footer
+st.markdown("""
+    <div class="footer">
+        <div style="text-align: right; padding-right: 20px;">
+            Developed by 
+            <a href="https://www.linkedin.com/in/raj-kapoor-aung-bo-bo-a34b47146" target="_blank">
+                Raj(ABB)
+            </a> | 
+            <a href="https://github.com/ABoBo555/UPI-Data-Scrap-Viz" target="_blank">
+                <img src="https://github.com/favicon.ico" width="16" height="16">
+                GitHub
+            </a>
         </div>
-    """, unsafe_allow_html=True)
+    </div>
+""", unsafe_allow_html=True)

@@ -36,8 +36,8 @@ def load_and_process_data():
         df_paytm = pd.read_csv('paytm.csv')
         df_gpay = pd.read_csv('gpay.csv')
         combined_df = pd.concat([df_paytm, df_gpay], ignore_index=True)
-        combined_df.to_csv('combined_data.csv', index=False)
-        print("Combined data saved to combined_data.csv")
+        # combined_df.to_csv('combined_data.csv', index=False)
+        # print("Combined data saved to combined_data.csv")
     except FileNotFoundError:
         print("Warning: One or both of the input CSV files (paytm.csv, gpay.csv) were not found. Trying to load combined_data.csv directly.")
     except Exception as e:
@@ -45,7 +45,46 @@ def load_and_process_data():
 
     try:
         # Load the combined data
-        df = pd.read_csv('combined_data.csv', engine='python', skip_blank_lines=True)
+        df = combined_df
+        # df = pd.read_csv('combined_data.csv', engine='python', skip_blank_lines=True)
+
+        df['Recipent/Sender Info'] = df['Recipent/Sender Info'].str.lower().str.strip()
+        
+        # Text transformation mappings
+        transformations = {
+            r'recharge of jio mobile \d+': 'to jio prepaid',
+            r'to jio prepaid( recharges)?': 'to jio prepaid',
+            r'purchase of delhi metro qr tickets': 'to delhi metro',
+            r'to delhi metro rail cor(poration ltd)?': 'to delhi metro',
+            r'to dmrc( limited)?': 'to delhi metro',
+            r'to abhibus( com)?': 'to abhibus',
+            r'to amazon pay groceries': 'to amazon india',
+            r'to amazon india': 'to amazon india',
+            r'to archaeological survey of india( 02)?': 'to archaeological survey of india',
+            r'to blu\s?smart mobility private limited': 'to blusmart mobility private limited',
+            r'to delhivery\s?(?:private)?limited': 'to delhivery limited',
+            r'to (?:hotel )?hari piorko( grand)?': 'to hotel hari piorko',
+            r'to lords trading co(?:mpany)?': 'to lords trading company',
+            r'to sanjay  kumar': 'to sanjay kumar',
+            r'to yarraphagari pranay( theja)?': 'to yarraphagari pranay',
+            r'(?:paid )?to www tatacliq com': 'to tatacliq'
+        }
+        
+        # Apply transformations
+        for pattern, replacement in transformations.items():
+            df['Recipent/Sender Info'] = df['Recipent/Sender Info'].str.replace(
+                pattern, replacement, regex=True
+            )
+        
+        # Rows to delete
+        rows_to_delete = [
+            'money sent to ali elsayed abakar eldago',
+            'received from ali elsayed abakar eldago',
+            'to tata cliq'
+        ]
+        
+        # Remove specified rows
+        df = df[~df['Recipent/Sender Info'].isin(rows_to_delete)]
         
         # Clean 'Amount' - remove ₹ and commas, convert to numeric
         df['Amount'] = df['Amount'].str.replace('₹', '').str.replace(',', '').astype(float)
@@ -72,7 +111,14 @@ def load_and_process_data():
         
         df.loc[mask_0572, 'Payment Method'] = 'Jammu and Kashmir Bank - 0572'
         df.loc[mask_1552, 'Payment Method'] = 'State Bank Of India - 1552'
-        
+
+        # convert Status value 'Sent' to 'Paid'
+        sent_df = df['Status'].str.contains('Sent',na=False)
+        df.loc[sent_df,'Status'] = 'Paid'
+
+        df.to_csv('combined_data.csv', index=False)
+        print("Combined data saved to combined_data.csv")        
+
         return df
         
     except Exception as e:

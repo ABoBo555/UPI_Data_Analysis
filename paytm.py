@@ -4,7 +4,7 @@ import sys
 
 # --- Configuration ---
 # !!! IMPORTANT: Replace with the correct path to YOUR Excel file !!!
-excel_file_path = 'paytm.xlsx'
+excel_file_path = 'Paytm_data.xlsx'
 sheet_name = 'Passbook Payment History' # Use None to read the first sheet, or specify 'Sheet1', 'Transactions', etc.
 comment_to_remove = "This is not included in total paid and received calculations." # Exact string to filter out
 
