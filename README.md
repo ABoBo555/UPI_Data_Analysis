@@ -30,7 +30,7 @@ The [UPI Data Analyzer](https://upidataviz.streamlit.app/) provides an interacti
 - Download your processed data as CSV for further analysis
 
 ![upi_1](https://github.com/ABoBo555/UPI_Data_Analysis/blob/main/upi_2.png)
-![upi_2](hhttps://github.com/ABoBo555/UPI_Data_Analysis/blob/main/upi_1.png)
+![upi_2](https://github.com/ABoBo555/UPI_Data_Analysis/blob/main/upi_1.png)
 
 No installation required - just visit the website and start analyzing your data! Your data remains private and is processed entirely in your browser session.
 
