@@ -29,7 +29,8 @@ The [UPI Data Analyzer](https://upidataviz.streamlit.app/) provides an interacti
   - Daily spending patterns
 - Download your processed data as CSV for further analysis
 
-![UPI Data Analyzer Interface](https://raw.githubusercontent.com/ABoBo555/UPI-Data-Scrap-Viz/main/demo_images/app_interface.png)
+![upi_1](https://github.com/user-attachments/assets/338f24c7-7d48-48dd-bb99-7dad7e39b4a1)
+![upi_2](https://github.com/user-attachments/assets/34f3509b-3f3b-48ec-b7ef-e9f8b1fee8cf)
 
 No installation required - just visit the website and start analyzing your data! Your data remains private and is processed entirely in your browser session.
 
@@ -48,68 +49,3 @@ No installation required - just visit the website and start analyzing your data!
 
 #### ✅ Paytm
 >1. Open the **Paytm App**.
->2. Go to: Paytm > Balance & History > ⋮ Menu > Download (.xlsx)
->3. Upload the downloaded `.xlsx` file into your project workspace.
-
----
-
-### 🧪 2. Run the Python Files
-
-In your local environment:
-
-> Run this file run.py
-
-This will load data and visualize your transaction data 📈
-Then, you can see the graphs and charts saved in a new generated'Saved_charts' folder.
-
----
-
-## 🚀 Try on Google Colab
-
-You can run this directly from your browser using [Google Colab](https://colab.research.google.com):
-
-👉 **[Open in Colab](https://colab.research.google.com/drive/1hzUANIiwNv-OyMVOBExpGEcljvjjNM3K#scrollTo=bf9b55fa&uniqifier=1)**
-
-### In Colab:
-1. When prompted(choose files), first upload the `My Activity.html` file (Google Pay).
-2. On the next prompt, upload the **Paytm `.xlsx`** file.
-3. Keep running the cells to see your transaction stats come to life!
-
----
-
-## 📷 Generated Visuals include
-
-- Net Overall Flow
-- Usage of different Payemnt Methods
-- Monthly trends
-- Top spending months
-- Transaction Distribution based-on range
-- Top recipients/senders
-- Meaningful Insight Card
----
-
-## 🛠️ Tech Stack
-
-- Python 🐍
-- Pandas
-- Matplotlib
-- Seaborn
-- Google Colab ☁️
-
----
-
-## 🔧 Requirements
-
-- Python 3.13.1
-- Virtual environment recommended (`python -m venv myenv`)
-- Install dependencies using:
-
-```bash
-pip install -r requirements.txt
-```
-
-## 🙌 Contribution & Feedback
-
-Feel free to open issues, contribute enhancements, or suggest features. Let’s improve personal finance visibility for everyone! ✨
-
----
