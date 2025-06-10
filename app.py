@@ -7,6 +7,7 @@ import tempfile
 import os
 from bs4 import BeautifulSoup
 import importlib.util
+import re  # Add this import for regular expressions
 
 def load_python_file(file_path):
     """Load a Python file as a module"""
@@ -16,56 +17,247 @@ def load_python_file(file_path):
     return module
 
 def process_gpay_data(html_content):
-    """Process GPay data using gpay.py"""
-    # Create a temporary file to store the HTML content
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
-        temp_file.write(html_content)
-        temp_html_path = temp_file.name
-
+    """Process Google Pay HTML data with exact logic from gpay.py"""
     try:
-        # Load gpay.py as a module
-        gpay_module = load_python_file('gpay.py')
-        
-        # Modify the module's file path variable
-        gpay_module.html_file_path = temp_html_path
-        
-        # Process will create gpay.csv
-        if hasattr(gpay_module, 'process_data'):
-            gpay_module.process_data()
-        
-        # Read the resulting CSV
-        if os.path.exists('gpay.csv'):
-            return pd.read_csv('gpay.csv')
+        # Parse HTML content
+        try:
+            soup = BeautifulSoup(html_content, 'lxml')
+        except ImportError:
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Find all transaction blocks
+        transaction_blocks = soup.find_all('div', class_='outer-cell mdl-cell mdl-cell--12-col mdl-shadow--2dp')
+        if not transaction_blocks:
+            st.warning("No transaction blocks found. Check if this is the correct Google Pay Activity file.")
+            return None
+
+        # Extract Data Points
+        extracted_data = []
+
+        for block_index, block in enumerate(transaction_blocks):
+            data = {
+                'Title': None,
+                'Status': None,
+                'Amount': None,
+                'Recipent/Sender Info': None,
+                'Payment Method': None,
+                'Date': None,
+                'Time': None
+            }
+
+            # Extract Title
+            title_tag = block.find('p', class_='mdl-typography--title')
+            if title_tag:
+                data['Title'] = title_tag.get_text(strip=True)
+
+            # Find inner grid and content cell
+            inner_grid = block.find('div', class_='mdl-grid')
+            if not inner_grid:
+                extracted_data.append(data)
+                continue
+
+            content_cell = inner_grid.find('div', class_='content-cell mdl-cell mdl-cell--6-col mdl-typography--body-1')
+
+            if content_cell:
+                lines = [text for text in content_cell.stripped_strings]
+
+                if len(lines) >= 1:
+                    main_line = lines[0]
+
+                    # Parse Status and Amount
+                    match_base = re.match(
+                        r'^(Paid|Sent|Received)\s+'
+                        r'(₹[\d,]+\.\d{2,})\s*'
+                        r'(.*)$',
+                        main_line,
+                        re.IGNORECASE | re.DOTALL
+                    )
+
+                    if match_base:
+                        data['Status'] = match_base.group(1).capitalize()
+                        data['Amount'] = match_base.group(2)
+                        remainder = match_base.group(3).strip()
+
+                        # Parse recipient and payment method
+                        using_match = re.search(r'\susing\s+(.*)$', remainder, re.IGNORECASE)
+                        if using_match:
+                            payment_method = f"using {using_match.group(1).strip()}"
+                            potential_recipient = remainder[:using_match.start()].strip()
+                            
+                            if potential_recipient.lower().startswith('to ') or potential_recipient.lower().startswith('from '):
+                                prefix_lower = potential_recipient[:potential_recipient.find(' ')+1].lower()
+                                status_lower = data['Status'].lower()
+                                if (status_lower in ['paid', 'sent'] and prefix_lower == 'to ') or \
+                                   (status_lower == 'received' and prefix_lower == 'from '):
+                                    data['Recipent/Sender Info'] = potential_recipient
+                            elif potential_recipient:
+                                prefix = 'to' if data['Status'] in ['Paid', 'Sent'] else 'from'
+                                data['Recipent/Sender Info'] = f"{prefix} {potential_recipient}"
+
+                            data['Payment Method'] = payment_method
+                        else:
+                            potential_recipient = remainder
+                            if potential_recipient.lower().startswith('to ') or potential_recipient.lower().startswith('from '):
+                                prefix_lower = potential_recipient[:potential_recipient.find(' ')+1].lower()
+                                status_lower = data['Status'].lower()
+                                if (status_lower in ['paid', 'sent'] and prefix_lower == 'to ') or \
+                                   (status_lower == 'received' and prefix_lower == 'from '):
+                                    data['Recipent/Sender Info'] = potential_recipient
+                            elif potential_recipient:
+                                prefix = 'to' if data['Status'] in ['Paid', 'Sent'] else 'from'
+                                data['Recipent/Sender Info'] = f"{prefix} {potential_recipient}"
+
+                    # Parse Date and Time
+                    if len(lines) >= 2:
+                        date_time_line = lines[1]
+                        parts = date_time_line.split(',')
+                        if len(parts) >= 3:
+                            data['Date'] = f"{parts[0].strip()} {parts[1].strip()}"
+                            time_part_str = parts[2].strip()
+                            time_match = re.search(r'(\d{1,2}:\d{2}:\d{2}(\s*|\u202f)[AP]M)', time_part_str)
+                            if time_match:
+                                time_str = time_match.group(1)
+                                time_str = time_str.replace('\u202f', ' ').replace(' ', ' ').strip()
+                                time_str = re.sub(r'\s+', ' ', time_str)
+                                data['Time'] = time_str
+
+            extracted_data.append(data)
+
+        # Create DataFrame and clean data
+        if not extracted_data:
+            st.error("No data was extracted from the file")
+            return None
+
+        df = pd.DataFrame(extracted_data)
+        df = df[['Title', 'Status', 'Amount', 'Recipent/Sender Info', 'Payment Method', 'Date', 'Time']]
+
+        # Data Cleansing
+        empty_both = df['Recipent/Sender Info'].isna() & df['Payment Method'].isna()
+        status_sent_paid = df['Status'].isin(['Sent', 'Paid'])
+        status_received = df['Status'] == 'Received'
+
+        df.loc[empty_both & status_sent_paid, 'Recipent/Sender Info'] = 'to Unknown'
+        df.loc[empty_both & status_received, 'Recipent/Sender Info'] = 'from Unknown'
+        df.loc[empty_both, 'Payment Method'] = 'Unknown'
+        df.loc[df['Payment Method'].isna(), 'Payment Method'] = 'Unknown'
+
+        # Fix misaligned bank account information
+        bank_account_mask = df['Recipent/Sender Info'].str.contains('to using Bank Account', na=False)
+        for idx in df[bank_account_mask].index:
+            recipient_value = df.loc[idx, 'Recipent/Sender Info']
+            payment_method = recipient_value.replace('to ', '', 1)
+            df.loc[idx, 'Payment Method'] = payment_method
+            df.loc[idx, 'Recipent/Sender Info'] = 'to Unknown'
+
+        return df
+
+    except Exception as e:
+        st.error(f"Error processing Google Pay data: {str(e)}")
         return None
-    finally:
-        # Clean up temporary file
-        os.unlink(temp_html_path)
 
 def process_paytm_data(excel_content):
-    """Process Paytm data using paytm.py"""
-    # Create a temporary file to store the Excel content
-    with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as temp_file:
-        temp_file.write(excel_content.getvalue())
-        temp_excel_path = temp_file.name
-
+    """Process Paytm data from uploaded Excel file using same logic as paytm.py"""
     try:
-        # Load paytm.py as a module
-        paytm_module = load_python_file('paytm.py')
+        # Read Excel content - specifically the "Passbook Payment History" sheet
+        df = pd.read_excel(excel_content, sheet_name='Passbook Payment History', dtype=str)
         
-        # Modify the module's file path variable
-        paytm_module.excel_file_path = temp_excel_path
+        # --- Step 1: Initial Cleanup ---
+        # Trim Whitespace
+        df = df.map(lambda x: x.strip() if isinstance(x, str) else x)
         
-        # Process will create paytm.csv
-        if hasattr(paytm_module, 'process_data'):
-            paytm_module.process_data()
+        # Rename Columns
+        rename_map = {
+            'Transaction Details': 'Recipent/Sender Info',
+            'Your Account': 'Payment Method'
+        }
+        for old_name, new_name in rename_map.items():
+            if old_name in df.columns:
+                df.rename(columns={old_name: new_name}, inplace=True)
         
-        # Read the resulting CSV
-        if os.path.exists('paytm.csv'):
-            return pd.read_csv('paytm.csv')
+        # Drop Non-Essential Columns
+        cols_to_drop = ['UPI Ref No.', 'Order ID', 'Remarks', 'Tags']
+        existing_cols_to_drop = [col for col in cols_to_drop if col in df.columns]
+        if existing_cols_to_drop:
+            df.drop(columns=existing_cols_to_drop, inplace=True)
+        
+        # --- Step 2: Filter Comments ---
+        comment_to_remove = "This is not included in total paid and received calculations."
+        if 'Comment' in df.columns:
+            df['Comment'] = df['Comment'].astype(str).fillna('')
+            df = df[df['Comment'] != comment_to_remove].copy()
+            df.drop(columns=['Comment'], inplace=True)
+        
+        # --- Step 3: Apply Transformations ---
+        # Add Title
+        df['Title'] = 'Paytm'
+        
+        # Process Amount and Status
+        if 'Amount' in df.columns:
+            original_amount_str = df['Amount'].astype(str).copy()
+            df['Numeric_Amount'] = df['Amount'].str.replace(r'[+,"]', '', regex=True).str.strip()
+            df['Numeric_Amount'] = pd.to_numeric(df['Numeric_Amount'], errors='coerce')
+            
+            # Create Status based on Amount
+            df['Status'] = 'Unknown'
+            df.loc[df['Numeric_Amount'] >= 0, 'Status'] = 'Received'
+            df.loc[df['Numeric_Amount'] < 0, 'Status'] = 'Paid'
+            
+            # Format Amount
+            failed_amount_mask = df['Numeric_Amount'].isna()
+            df.loc[~failed_amount_mask, 'Amount'] = df.loc[~failed_amount_mask, 'Numeric_Amount'].abs().map('₹{:.2f}'.format)
+            df.loc[failed_amount_mask, 'Amount'] = original_amount_str[failed_amount_mask]
+            
+            df.drop(columns=['Numeric_Amount'], inplace=True)
+        
+        # Format Date
+        if 'Date' in df.columns:
+            def format_date(date_str):
+                try:
+                    if '/' in date_str:
+                        parts = date_str.split('/')
+                        if len(parts) == 3:
+                            day, month, year = parts
+                            dt = pd.to_datetime(f"{year}-{month}-{day}")
+                            return dt.strftime('%b %d %Y')
+                    dt = pd.to_datetime(date_str)
+                    return dt.strftime('%b %d %Y')
+                except:
+                    return date_str
+            df['Date'] = df['Date'].apply(format_date)
+        
+        # Format Time
+        if 'Time' in df.columns:
+            original_times = df['Time'].astype(str).copy()
+            try:
+                datetime_times = pd.to_datetime(original_times, errors='coerce')
+                failed_mask = datetime_times.isna()
+                if (~failed_mask).any():
+                    formatted_times = datetime_times[~failed_mask].dt.strftime('%I:%M:%S %p')
+                    formatted_times = formatted_times.apply(lambda x: x[1:] if isinstance(x, str) and x.startswith('0') else x)
+                    df.loc[~failed_mask, 'Time'] = formatted_times
+                df.loc[failed_mask, 'Time'] = original_times[failed_mask]
+            except:
+                df['Time'] = original_times
+        
+        # --- Step 4: Final Column Ordering ---
+        final_columns = [
+            'Title', 'Status', 'Amount', 'Recipent/Sender Info',
+            'Payment Method', 'Date', 'Time'
+        ]
+        
+        # Keep only columns that exist
+        final_columns = [col for col in final_columns if col in df.columns]
+        df_cleaned = df[final_columns].copy()
+        
+        if df_cleaned.empty:
+            st.error("No valid transactions found in Paytm data")
+            return None
+            
+        return df_cleaned
+        
+    except Exception as e:
+        st.error(f"Error processing Paytm data: {str(e)}")
         return None
-    finally:
-        # Clean up temporary file
-        os.unlink(temp_excel_path)
 
 
 def data_cleansing(combine_df):
