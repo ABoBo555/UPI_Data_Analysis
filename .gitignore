@@ -1,0 +1,22 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Jupyter notebook checkpoints
+*.ipynb_checkpoints/
+
+# Virtual environments
+myenv/
+
+# VS Code settings
+.vscode/
+
+# OS junk files
+.DS_Store
+Thumbs.db
+
+# Data/output files
+*.csv
+*.xlsx
+*.html
+Saved_charts/
